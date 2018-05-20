@@ -3,6 +3,7 @@
     <include resource="com/blackbaud/boot/logback/common.xml" />
 
 	<logger name="com.blackbaud" level="DEBUG"/>
+	<logger name="com.netflix.rewrite" level="ERROR"/>
 
 	<root level="INFO">
 		<appender-ref ref="CONSOLE" />

@@ -16,3 +16,5 @@ out/
 
 # Swagger
 client/src/main/java
+
+repos.list
