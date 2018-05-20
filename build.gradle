@@ -36,6 +36,7 @@ allprojects {
 }
 
 dependencies {
+    compile "com.blackbaud:tokens-client:3.+"
     compile "com.blackbaud:common-spring-boot-rest:${commonSpringBootVersion}"
 
     sharedTestCompile "com.blackbaud:common-spring-boot-rest-test:${commonSpringBootVersion}"
