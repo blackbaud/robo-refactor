@@ -18,6 +18,9 @@ dependencies {
     compile "org.gradle:gradle-tooling-api:2.14.1"
     compile "org.eclipse.mylyn.github:org.eclipse.egit.github.core:2.1.5"
     compile "com.blackbaud:common-spring-boot-rest:1.4.1.RELEASE-3.+"
+    compile ("com.blackbaud:jenkins-jobs-dsl:1.+") {
+        transitive = false
+    }
     compile files("${System.getProperty('java.home')}/../lib/tools.jar")
     compileOnly "org.projectlombok:lombok:1.16.18"
 

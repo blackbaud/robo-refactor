@@ -102,10 +102,15 @@ class GitRepository {
 
         PullRequest pr = new PullRequest()
         pr.title = branch
-        pr.body = "${branch} ${prDescription}"
+        pr.body = getPullRequestBody(branch, prDescription)
         pr.head = new PullRequestMarker().setLabel(branch)
         pr.base = new PullRequestMarker().setLabel("master")
         repositoryManager.createPullRequest(repository, pr)
+    }
+
+    private String getPullRequestBody(String branch, String prDescription) {
+        String ownerTag = repositoryManager.getTeamOwnerTag(name)
+        ownerTag != null ? "${ownerTag} ${branch} ${prDescription}" : "${branch} ${prDescription}"
     }
 
 }
