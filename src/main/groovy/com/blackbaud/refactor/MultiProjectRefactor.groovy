@@ -17,12 +17,12 @@ class MultiProjectRefactor {
     private File buildDir
     private File stagingDir
     private boolean dryRun = false
-    private boolean verifyPullRequest = true
 
     private MultiProjectRefactor(GitRepositoryManager gitRepositoryManager) {
         this.gitRepositoryManager = gitRepositoryManager
         this.buildDir = new File(new File("build").absolutePath)
         this.stagingDir = new File(buildDir, "staging")
+        this.stagingDir.deleteDir()
         this.stagingDir.mkdirs()
     }
 
@@ -30,36 +30,49 @@ class MultiProjectRefactor {
         this.dryRun = true
     }
 
-    void disableVerifyPullRequest() {
-        this.verifyPullRequest = false
-    }
-
-    void apply(Refactor refactor, List<String> repositories) {
-        if (repositories.isEmpty()) {
+    void apply(Refactor refactor, List<String> repositoryNames) {
+        if (repositoryNames.isEmpty()) {
             throw new RuntimeException("Repository list empty")
         }
 
-        File alreadyProcessedReposFile = new File(buildDir, refactor.getStoryId())
-        List<String> alreadyProcessedRepos = alreadyProcessedReposFile.exists() ? alreadyProcessedReposFile.readLines() : []
+        AlreadyProcessedRepositoryManager alreadyProcessedRepositoryManager = new AlreadyProcessedRepositoryManager(buildDir, refactor.getStoryId())
+        List<GitRepository> repositories = []
 
-        for (String repositoryName : repositories) {
-            if (alreadyProcessedRepos.contains(repositoryName)) {
-                continue
+        try {
+            for (String repositoryName : repositoryNames) {
+                if (alreadyProcessedRepositoryManager.isAlreadyProcessed(repositoryName)) {
+                    continue
+                }
+
+                GitRepository repository = refactorProject(refactor, repositoryName)
+                if (repository != null) {
+                    repositories << repository
+                }
+                alreadyProcessedRepositoryManager.addProcessedRepo(repositoryName)
             }
-
-            refactorProject(refactor, repositoryName)
-
-            alreadyProcessedRepos.add(repositoryName)
-            alreadyProcessedReposFile.text = alreadyProcessedRepos.join(System.getProperty("line.separator"))
+        } catch (Exception ex) {
+            println "Failure while applying refactoring, ex=${ex.message}"
+            ex.printStackTrace()
+        } finally {
+            if ((repositories.size() > 0) && (dryRun == false) && shouldCreatePr()) {
+                pushBranchesAndCreatePRs(repositories, refactor)
+            }
         }
     }
 
-    private refactorProject(Refactor refactor, String repositoryName) {
-        GitRepository repository = gitRepositoryManager.getRepository(repositoryName)
-        stagingDir.deleteDir()
-        repository.clone(stagingDir)
+    private void pushBranchesAndCreatePRs(List<GitRepository> repositories, Refactor refactor) {
+        for (GitRepository repository : repositories) {
+            log.info("Pushing branch and creating PR for ${repository.name}")
+            repository.pushAsBranchAndCreatePullRequest(refactor.storyId, refactor.pullRequestDescription)
+        }
+    }
 
-        GradleProject project = new GradleProject(stagingDir)
+    private GitRepository refactorProject(Refactor refactor, String repositoryName) {
+        GitRepository repository = gitRepositoryManager.getRepository(repositoryName)
+        File repoDir = new File(stagingDir, repositoryName)
+        repository.clone(repoDir)
+
+        GradleProject project = new GradleProject(repoDir)
 
         log.info("")
         log.info("************************************************************")
@@ -82,18 +95,15 @@ class MultiProjectRefactor {
             // perhaps lack of docker-machine environment initialization?
 //            println "Validating project..."
 //            project.validate()
-
-            if ((verifyPullRequest == false) || (dryRun == false && shouldCreatePr())) {
-                log.info("Pushing branch and creating PR...")
-                repository.pushAsBranchAndCreatePullRequest(refactor.storyId, refactor.pullRequestDescription)
-            }
+            repository
         } else {
             log.info("No changes detected, moving on to next project")
+            null
         }
     }
 
     private boolean shouldCreatePr() {
-        println "Would you like to push the branch and create a PR (y/n)?"
+        println "Would you like to push the branchs and create PRs (y/n)?"
         String response = System.in.newReader().readLine().toLowerCase()
         int failCount = 0
         while (response != "y" && response != "n") {
@@ -108,6 +118,27 @@ class MultiProjectRefactor {
             failCount++
         }
         response == "y"
+    }
+
+    private static class AlreadyProcessedRepositoryManager {
+
+        File alreadyProcessedReposFile
+        List<String> alreadyProcessedRepos
+
+        AlreadyProcessedRepositoryManager(File buildDir, String storyId) {
+            this.alreadyProcessedReposFile = new File(buildDir, storyId)
+            this.alreadyProcessedRepos = alreadyProcessedReposFile.exists() ? alreadyProcessedReposFile.readLines() : []
+        }
+
+        boolean isAlreadyProcessed(String repositoryName) {
+            alreadyProcessedRepos.contains(repositoryName)
+        }
+
+        void addProcessedRepo(String repositoryName) {
+            alreadyProcessedRepos.add(repositoryName)
+            alreadyProcessedReposFile.text = alreadyProcessedRepos.join(System.getProperty("line.separator"))
+        }
+
     }
 
 }
