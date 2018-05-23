@@ -48,22 +48,22 @@ class MultiProjectRefactor {
                 if (repository != null) {
                     repositories << repository
                 }
-                alreadyProcessedRepositoryManager.addProcessedRepo(repositoryName)
             }
         } catch (Exception ex) {
             println "Failure while applying refactoring, ex=${ex.message}"
             ex.printStackTrace()
         } finally {
             if ((repositories.size() > 0) && (dryRun == false) && shouldCreatePr()) {
-                pushBranchesAndCreatePRs(repositories, refactor)
+                pushBranchesAndCreatePRs(repositories, refactor, alreadyProcessedRepositoryManager)
             }
         }
     }
 
-    private void pushBranchesAndCreatePRs(List<GitRepository> repositories, Refactor refactor) {
+    private void pushBranchesAndCreatePRs(List<GitRepository> repositories, Refactor refactor, AlreadyProcessedRepositoryManager alreadyProcessedRepositoryManager) {
         for (GitRepository repository : repositories) {
             log.info("Pushing branch and creating PR for ${repository.name}")
             repository.pushAsBranchAndCreatePullRequest(refactor.storyId, refactor.pullRequestDescription)
+            alreadyProcessedRepositoryManager.addPushedRepo(repository.name)
         }
     }
 
@@ -122,12 +122,14 @@ class MultiProjectRefactor {
 
     private static class AlreadyProcessedRepositoryManager {
 
-        File alreadyProcessedReposFile
+        File alreadyPushedReposFile
         List<String> alreadyProcessedRepos
+        List<String> alreadyPushedRepos
 
         AlreadyProcessedRepositoryManager(File buildDir, String storyId) {
-            this.alreadyProcessedReposFile = new File(buildDir, storyId)
-            this.alreadyProcessedRepos = alreadyProcessedReposFile.exists() ? alreadyProcessedReposFile.readLines() : []
+            this.alreadyPushedReposFile = new File(buildDir, storyId)
+            this.alreadyProcessedRepos = alreadyPushedReposFile.exists() ? alreadyPushedReposFile.readLines() : []
+            this.alreadyPushedRepos = new ArrayList<>(alreadyProcessedRepos)
         }
 
         boolean isAlreadyProcessed(String repositoryName) {
@@ -135,10 +137,13 @@ class MultiProjectRefactor {
         }
 
         void addProcessedRepo(String repositoryName) {
-            alreadyProcessedRepos.add(repositoryName)
-            alreadyProcessedReposFile.text = alreadyProcessedRepos.join(System.getProperty("line.separator"))
+            alreadyProcessedRepos << repositoryName
         }
 
+        void addPushedRepo(String repositoryName) {
+            alreadyPushedRepos << repositoryName
+            alreadyPushedReposFile.text = alreadyPushedRepos.join(System.getProperty("line.separator"))
+        }
     }
 
 }
